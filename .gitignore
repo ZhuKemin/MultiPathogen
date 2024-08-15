@@ -1,0 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Data files (to ignore the data directory)
+data/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Environments
+env/
+venv/
+ENV/
+.venv/
+*.env
+
+# PyCharm project settings
+.idea/
+
+# VSCode settings
+.vscode/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*.bak
+
+# Output files (e.g., from models)
+models/
+*.h5
+*.pkl
+*.joblib
+
+# Files related to your operating system
+.DS_Store
+Thumbs.db
