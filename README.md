@@ -1,2 +1,1 @@
-# ProjectTemplate
-A reusable template for research projects, providing a structured layout for data, notebooks, models, and scripts. Clone to quickly start new research with a consistent setup.
+This repository contains code and data for analyzing the temporal dynamics of respiratory pathogens, specifically influenza virus (InfV) and respiratory syncytial virus (RSV), across multiple cities in mainland China
