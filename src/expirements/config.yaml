@@ -1,0 +1,45 @@
+data:
+  base_paths:
+    flu: "data/processed/flu/"
+    rsv: "data/processed/rsv/"
+
+scenarios:
+  baseline:
+    periods: 
+      monthly: [12]  # 月度数据对应的年度周期
+      weekly: [52]   # 周度数据对应的年度周期
+
+  cross_year:
+    periods: 
+      monthly:
+        fixed: 12       # 固定的年度周期
+        # range: [16, 36] # 跨年周期的范围
+        range: [16, 18] # 跨年周期的范围
+      weekly:
+        fixed: 52        # 固定的年度周期
+        range: [64, 104] # 跨年周期的范围
+
+  complex:
+    periods: 
+      monthly:
+        fixed: 12        # 固定的年度周期
+        # range1: [16, 36] # 第一个跨年周期的范围
+        # range2: [18, 48] # 第二个跨年周期的范围
+        range1: [16, 18] # 第一个跨年周期的范围
+        range2: [24, 25] # 第二个跨年周期的范围
+      weekly:
+        fixed: 52         # 固定的年度周期
+        range1: [64, 104] # 第一个跨年周期的范围
+        range2: [70, 120] # 第二个跨年周期的范围
+
+stl:
+  s_window: "periodic"
+  t_degree: 0
+
+mstl:
+  s_window: "periodic"
+  iterate: 50
+  t_degree: 0
+
+output:
+  result_dir: "results/decomposition/"
