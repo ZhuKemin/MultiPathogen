@@ -46,7 +46,6 @@ class DerivedMetricsCalculator:
         avg_rank = self.calculate_avg_rank(basic_metrics)
         norm_prod = self.calculate_norm_prod(basic_metrics)
 
-        # 确保返回的 derived_metrics 是一个 DataFrame 而不是 Series 的字符串表示
         derived_metrics = pd.DataFrame({
             'avg_rank': avg_rank,
             'norm_prod': norm_prod

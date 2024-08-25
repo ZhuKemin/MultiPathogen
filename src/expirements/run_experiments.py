@@ -8,8 +8,11 @@ project_root = os.path.abspath(os.path.join(current_dir, os.pardir, os.pardir))
 # 将项目根目录添加到 sys.path 中
 sys.path.append(project_root)
 
+
 import yaml
 import pandas as pd
+from itertools import product
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from src.models.decomposition_model import DecompositionModel
 from src.data.load_data import load_data, load_metadata
 from src.evaluation.basic_metrics import BasicMetricsCalculator
@@ -74,85 +77,129 @@ class ExperimentRunner:
         else:
             raise ValueError("必须提供文件名或城市名称中的一个来加载数据集。")
 
+    def _process_combination(self, period_combination, model):
+        """
+        处理单个周期组合的分解任务。
+
+        :param period_combination: 周期组合，可能是一个列表或元组，表示要分析的周期长度
+        :param model: DecompositionModel 实例，用于执行时间序列分解
+        :return: 返回周期组合和分解结果 (DataFrame)
+        """
+        print(f"Processing period combination: {period_combination}")
+        decomposition_result = model.decompose(self.dataset, period_combination)
+        return period_combination, decomposition_result
+
+    def _calculate_metrics(self, decomposition_results, basic_calculator, derived_calculator):
+        """
+        计算所有周期组合的基础指标和衍生指标。
+
+        :param decomposition_results: 所有分解结果的字典，键为周期组合，值为DataFrame
+        :param basic_calculator: BasicMetricsCalculator 实例，用于计算基础指标
+        :param derived_calculator: DerivedMetricsCalculator 实例，用于计算衍生指标
+        :return: 汇总后的基础指标和衍生指标
+        """
+        basic_metrics = basic_calculator.calculate_basic_metrics(decomposition_results)
+        derived_metrics = derived_calculator.calculate_derive_metrics(basic_metrics)
+        
+        return basic_metrics, derived_metrics
+
+    def _execute_combinations(self, periods, model, scenario_results):
+        """
+        执行所有周期组合的分解任务，根据配置选择并行或顺序执行。
+
+        :param periods: 场景中的周期设定，可以是列表或字典
+        :param model: DecompositionModel 实例，用于执行时间序列分解
+        :param scenario_results: 存储当前场景的分解结果列表
+        :return: 所有周期组合的分解结果
+        """
+        if isinstance(periods, list):
+            combinations = [tuple(periods)]  # 转换为单一组合的元组形式
+        elif isinstance(periods, dict):
+            fixed = periods['fixed']
+            ranges = [range(periods[key][0], periods[key][1] + 1) for key in periods if key != 'fixed']
+            combinations = [(fixed, *comb) for comb in product(*ranges)]
+        else:
+            raise ValueError("Unsupported periods type. Must be either list or dict.")
+
+        decomposition_results = {}
+
+        if self.parallel:
+            with ProcessPoolExecutor() as executor:
+                futures = [executor.submit(self._process_combination, comb, model) for comb in combinations]
+                for future in as_completed(futures):
+                    period_combination, decomposition_result = future.result()
+                    decomposition_results[period_combination] = decomposition_result
+        else:
+            for comb in combinations:
+                period_combination, decomposition_result = self._process_combination(comb, model)
+                decomposition_results[period_combination] = decomposition_result
+
+        return decomposition_results
+
     def run(self):
         """
-        执行实验，根据场景和配置文件中的设定
+        执行实验，根据场景和配置文件中的设定。
         """
         basic_calculator = BasicMetricsCalculator()
         derived_calculator = DerivedMetricsCalculator()
-
-        # 初始化 DecompositionModel
         model = DecompositionModel()
 
-        # 遍历每个场景
         for scenario in self.scenarios:
             print(f"Running scenario {scenario}")
             scenario_results = []
 
             periods = self.config['scenarios'][scenario]['periods'][self.metadata.get('frequency', 'monthly')]
 
-            # 运行分解模型
-            decomposition_result = model.decompose(self.dataset, periods)
+            # 执行分解并返回所有结果
+            decomposition_results = self._execute_combinations(periods, model, scenario_results)
 
-            # 保存分解结果
-            self._save_decomposition_result(decomposition_result, scenario, periods)
+            # 计算所有基础指标和衍生指标
+            basic_metrics, derived_metrics = self._calculate_metrics(decomposition_results, basic_calculator, derived_calculator)
+            
+            # 存储结果
+            self._save_metrics(scenario, basic_metrics, derived_metrics)
+            self._save_decomposition_result(scenario, decomposition_results)
 
-            # 计算基础指标
-            basic_metrics = basic_calculator.calculate_basic_metrics(decomposition_result)
-
-            # 计算衍生指标
-            derived_metrics = derived_calculator.calculate_derive_metrics(basic_metrics)
-
-            # 合并基础指标和衍生指标
-            combined_metrics = pd.concat([basic_metrics, derived_metrics], axis=1)
-
-            # 将周期信息添加到结果中
-            combined_metrics['periods'] = str(periods)
-            scenario_results.append(combined_metrics)
-
-            # 将场景结果保存到文件
-            self._save_metrics(scenario, scenario_results)
-
-    def _save_decomposition_result(self, decomposition_result, scenario, periods):
+    def _save_decomposition_result(self, scenario, decomposition_results):
         """
-        保存时间序列分解结果，每个周期组合保存为单独的文件。
-        
-        :param decomposition_result: 包含不同周期组合分解结果的字典
-        :param scenario: 当前运行的场景名称
-        :param periods: 当前场景下的周期组合列表
+        保存时间序列分解结果到指定路径。
+
+        :param scenario: 当前场景名称
+        :param decomposition_results: 分解后的结果字典，键为周期组合，值为DataFrame
         """
         output_dir = os.path.join(self.config['output']['result_dir'], self.pathogen, self.city, scenario)
         os.makedirs(output_dir, exist_ok=True)
 
-        # 遍历字典，分别保存每个周期组合的分解结果
-        for period, df in decomposition_result.items():
-            period_str = '_'.join(map(str, period))
+        for period_combination, df in decomposition_results.items():
+            period_str = '_'.join(map(str, period_combination))
             output_path = os.path.join(output_dir, f'cycle_{period_str}.csv')
+            print (df)
+            exit()
             df.to_csv(output_path, index=False)
             print(f"Decomposition result saved to {output_path}")
 
-    def _save_metrics(self, scenario, scenario_results):
+    def _save_metrics(self, scenario, basic_metrics, derived_metrics):
         """
-        将场景下的指标（包括基础和衍生指标）保存到一个表中。
-        
-        :param scenario: 当前运行的场景名称
-        :param scenario_results: 当前场景的结果列表
+        保存基础指标和衍生指标到指定路径。
+
+        :param scenario: 当前场景名称
+        :param basic_metrics: 计算后的基础指标 (DataFrame)
+        :param derived_metrics: 计算后的衍生指标 (DataFrame)
         """
         output_dir = os.path.join(self.config['output']['result_dir'], self.pathogen, self.city, scenario)
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, 'metrics.csv')
 
-        final_df = pd.concat(scenario_results, ignore_index=True)
+        # 合并基础指标和衍生指标
+        final_df = pd.concat([basic_metrics, derived_metrics], axis=1)
 
         # 拆解 period 列为 cycle1, cycle2, ...
         if 'period' in final_df.columns:
             period_columns = final_df['period'].apply(pd.Series)
             period_columns.columns = [f'cycle{i+1}' for i in range(period_columns.shape[1])]
-            final_df = pd.concat([period_columns, final_df.drop(columns=['periods'])], axis=1)
-
+            final_df = pd.concat([period_columns, final_df], axis=1).drop(columns=['period'])
         final_df.to_csv(output_path, index=False)
         print(f"Metrics saved to {output_path}")
-
 
     def _generate_visualization(self, result, scenario):
         """
@@ -174,7 +221,8 @@ if __name__ == "__main__":
         city="Beijing",
         # scenarios=["baseline", "cross_year", "complex"],
         # scenarios=["baseline", "cross_year"],
-        scenarios=["cross_year"],
+        # scenarios=["cross_year"],
+        # scenarios=["complex"],
         visualize=True
     )
     runner.run()
