@@ -173,8 +173,6 @@ class ExperimentRunner:
         for period_combination, df in decomposition_results.items():
             period_str = '_'.join(map(str, period_combination))
             output_path = os.path.join(output_dir, f'cycle_{period_str}.csv')
-            print (df)
-            exit()
             df.to_csv(output_path, index=False)
             print(f"Decomposition result saved to {output_path}")
 
@@ -219,7 +217,7 @@ if __name__ == "__main__":
     runner = ExperimentRunner(
         pathogen="flu",
         city="Beijing",
-        # scenarios=["baseline", "cross_year", "complex"],
+        scenarios=["baseline", "cross_year", "complex"],
         # scenarios=["baseline", "cross_year"],
         # scenarios=["cross_year"],
         # scenarios=["complex"],
