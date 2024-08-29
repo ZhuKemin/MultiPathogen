@@ -12,12 +12,13 @@ scenarios:
   cross_year:
     periods: 
       monthly:
-        fixed: 12       # 固定的年度周期
-        # range: [16, 36] # 跨年周期的范围
-        range: [16, 18] # 跨年周期的范围
+        range1: [12, 18]  # 第一个跨年周期的范围
+        range2: [18, 30]  # 第二个跨年周期的范围
+        # range2: [18, 36]  # 第二个跨年周期的范围
+        # range2: [35, 35]  # 第二个跨年周期的范围
       weekly:
-        fixed: 52        # 固定的年度周期
-        range: [64, 104] # 跨年周期的范围
+        range1: [52, 64]  # 第一个跨年周期的范围
+        range2: [64, 104] # 第二个跨年周期的范围
 
   complex:
     periods: 

@@ -17,6 +17,10 @@ from src.models.decomposition_model import DecompositionModel
 from src.data.load_data import load_data, load_metadata
 from src.evaluation.basic_metrics import BasicMetricsCalculator
 from src.evaluation.derived_metrics import DerivedMetricsCalculator
+from src.visualization.decomposition_visualizer import DecompositionVisualizer
+from src.projection.projection_model import ProjectionModel
+
+# TODO: 增加对周期组合超过半数据长度的判断
 
 class ExperimentRunner:
     def __init__(self, pathogen, city=None, filename=None, scenarios=None, parallel=True, visualize=False, config_path="src/expirements/config.yaml", metadata_path="data/metadata.yaml"):
@@ -89,20 +93,6 @@ class ExperimentRunner:
         decomposition_result = model.decompose(self.dataset, period_combination)
         return period_combination, decomposition_result
 
-    def _calculate_metrics(self, decomposition_results, basic_calculator, derived_calculator):
-        """
-        计算所有周期组合的基础指标和衍生指标。
-
-        :param decomposition_results: 所有分解结果的字典，键为周期组合，值为DataFrame
-        :param basic_calculator: BasicMetricsCalculator 实例，用于计算基础指标
-        :param derived_calculator: DerivedMetricsCalculator 实例，用于计算衍生指标
-        :return: 汇总后的基础指标和衍生指标
-        """
-        basic_metrics = basic_calculator.calculate_basic_metrics(decomposition_results)
-        derived_metrics = derived_calculator.calculate_derive_metrics(basic_metrics)
-        
-        return basic_metrics, derived_metrics
-
     def _execute_combinations(self, periods, model, scenario_results):
         """
         执行所有周期组合的分解任务，根据配置选择并行或顺序执行。
@@ -115,9 +105,13 @@ class ExperimentRunner:
         if isinstance(periods, list):
             combinations = [tuple(periods)]  # 转换为单一组合的元组形式
         elif isinstance(periods, dict):
-            fixed = periods['fixed']
-            ranges = [range(periods[key][0], periods[key][1] + 1) for key in periods if key != 'fixed']
-            combinations = [(fixed, *comb) for comb in product(*ranges)]
+            # 支持两个 range 的 cross_year 场景
+            if "range1" in periods and "range2" in periods:
+                range1 = range(periods['range1'][0], periods['range1'][1] + 1)
+                range2 = range(periods['range2'][0], periods['range2'][1] + 1)
+                combinations = [(r1, r2) for r1, r2 in product(range1, range2)]
+            else:
+                raise ValueError("For cross_year scenario, both 'range1' and 'range2' must be provided.")
         else:
             raise ValueError("Unsupported periods type. Must be either list or dict.")
 
@@ -136,58 +130,18 @@ class ExperimentRunner:
 
         return decomposition_results
 
-    def run(self):
+    def _calculate_metrics(self, decomposition_results, basic_calculator, derived_calculator):
         """
-        执行实验，根据场景和配置文件中的设定。
+        计算所有周期组合的基础指标和衍生指标，并合并为最终的指标 DataFrame。
+
+        :param decomposition_results: 所有分解结果的字典，键为周期组合，值为DataFrame
+        :param basic_calculator: BasicMetricsCalculator 实例，用于计算基础指标
+        :param derived_calculator: DerivedMetricsCalculator 实例，用于计算衍生指标
+        :return: 合并后的基础指标和衍生指标 (final_df)
         """
-        basic_calculator = BasicMetricsCalculator()
-        derived_calculator = DerivedMetricsCalculator()
-        model = DecompositionModel()
-
-        for scenario in self.scenarios:
-            print(f"Running scenario {scenario}")
-            scenario_results = []
-
-            periods = self.config['scenarios'][scenario]['periods'][self.metadata.get('frequency', 'monthly')]
-
-            # 执行分解并返回所有结果
-            decomposition_results = self._execute_combinations(periods, model, scenario_results)
-
-            # 计算所有基础指标和衍生指标
-            basic_metrics, derived_metrics = self._calculate_metrics(decomposition_results, basic_calculator, derived_calculator)
-            
-            # 存储结果
-            self._save_metrics(scenario, basic_metrics, derived_metrics)
-            self._save_decomposition_result(scenario, decomposition_results)
-
-    def _save_decomposition_result(self, scenario, decomposition_results):
-        """
-        保存时间序列分解结果到指定路径。
-
-        :param scenario: 当前场景名称
-        :param decomposition_results: 分解后的结果字典，键为周期组合，值为DataFrame
-        """
-        output_dir = os.path.join(self.config['output']['result_dir'], self.pathogen, self.city, scenario)
-        os.makedirs(output_dir, exist_ok=True)
-
-        for period_combination, df in decomposition_results.items():
-            period_str = '_'.join(map(str, period_combination))
-            output_path = os.path.join(output_dir, f'cycle_{period_str}.csv')
-            df.to_csv(output_path, index=False)
-            print(f"Decomposition result saved to {output_path}")
-
-    def _save_metrics(self, scenario, basic_metrics, derived_metrics):
-        """
-        保存基础指标和衍生指标到指定路径。
-
-        :param scenario: 当前场景名称
-        :param basic_metrics: 计算后的基础指标 (DataFrame)
-        :param derived_metrics: 计算后的衍生指标 (DataFrame)
-        """
-        output_dir = os.path.join(self.config['output']['result_dir'], self.pathogen, self.city, scenario)
-        os.makedirs(output_dir, exist_ok=True)
-        output_path = os.path.join(output_dir, 'metrics.csv')
-
+        basic_metrics = basic_calculator.calculate_basic_metrics(decomposition_results)
+        derived_metrics = derived_calculator.calculate_derive_metrics(basic_metrics)
+        
         # 合并基础指标和衍生指标
         final_df = pd.concat([basic_metrics, derived_metrics], axis=1)
 
@@ -196,15 +150,151 @@ class ExperimentRunner:
             period_columns = final_df['period'].apply(pd.Series)
             period_columns.columns = [f'cycle{i+1}' for i in range(period_columns.shape[1])]
             final_df = pd.concat([period_columns, final_df], axis=1).drop(columns=['period'])
+
+        return final_df
+
+    def _process_projections(self, decomposition_results, projection_model):
+        """
+        对每个分解结果进行投影处理，生成带有投影数据的结果字典。
+
+        :param decomposition_results: 分解结果的字典，key 为周期组合，value 为分解后的 DataFrame。
+        :param projection_model: ProjectionModel 实例，用于生成投影数据。
+        :return: 包含投影数据的新字典，key 与 decomposition_results 相同，value 为带有投影数据的 DataFrame。
+        """
+        def apply_projection(key, df):
+            return projection_model.project(df, cycles=key)
+        
+        # 使用 map 函数将投影应用于每个分解结果
+        projection_results = {key: apply_projection(key, df) for key, df in decomposition_results.items()}
+        
+        return projection_results
+
+    def select_top_cycles(self, metrics_df, metric, percent, ascending=True):
+        """
+        根据指定的指标和百分比，选取前百分之几的周期组合。
+        
+        :param metrics_df: 包含周期组合及其指标得分的 DataFrame
+        :param metric: 用于筛选的具体指标名称（如 'nll'）
+        :param percent: 选择的百分比（如 5 表示前 5%）
+        :param ascending: 如果为 True，选择最小的指标值；如果为 False，选择最大的指标值。
+        :return: 包含选定周期组合及其得分的 DataFrame
+        """
+        # 按指定的指标进行排序
+        sorted_df = metrics_df.sort_values(by=metric, ascending=ascending)
+        
+        # 计算需要选择的行数
+        top_n = int(len(sorted_df) * (percent / 100))
+        
+        # 选取前百分之几的周期组合
+        selected_cycles = sorted_df.head(top_n)
+        
+        # 返回选定的周期组合及其得分
+        return selected_cycles
+
+    def _save_decomposition_result(self, scenario, decomposition_results):
+        """
+        保存时间序列分解结果到指定路径。
+
+        :param scenario: 当前场景名称
+        :param decomposition_results: 分解后的结果字典，键为周期组合，值为DataFrame
+        """
+        output_dir = os.path.join(self.config['output']['result_dir'], 'decomposition', self.pathogen, self.city, scenario)
+        os.makedirs(output_dir, exist_ok=True)
+
+        for period_combination, df in decomposition_results.items():
+            period_str = '_'.join(map(str, period_combination))
+            output_path = os.path.join(output_dir, f'cycle_{period_str}.csv')
+            df.to_csv(output_path, index=False)
+            print(f"Decomposition result saved to {output_path}")
+
+    def _save_projection_result(self, scenario, projection_results):
+        """
+        保存时间序列投影结果到指定路径。
+
+        :param scenario: 当前场景名称
+        :param projection_results: 带有投影数据的结果字典，键为周期组合，值为带有投影数据的 DataFrame
+        """
+        output_dir = os.path.join(self.config['output']['result_dir'], 'projection', self.pathogen, self.city, scenario)
+        os.makedirs(output_dir, exist_ok=True)
+
+        for period_combination, df in projection_results.items():
+            period_str = '_'.join(map(str, period_combination))
+            output_path = os.path.join(output_dir, f'cycle_{period_str}.csv')
+            df.to_csv(output_path, index=False)
+            print(f"Projection result saved to {output_path}")
+
+    def _save_metrics(self, scenario, final_df):
+        """
+        保存合并后的基础指标和衍生指标到指定路径。
+
+        :param scenario: 当前场景名称
+        :param final_df: 合并后的指标 DataFrame
+        """
+        output_dir = os.path.join(self.config['output']['result_dir'], self.pathogen, self.city, scenario)
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, 'metrics.csv')
         final_df.to_csv(output_path, index=False)
         print(f"Metrics saved to {output_path}")
 
-    def _generate_visualization(self, result, scenario):
+    def _generate_visualization(self, scenario, decomposition_results, final_metrics_df, projection_results, selected_cycles_df):
         """
-        生成并保存结果的可视化图表
+        生成并保存结果的可视化图表，包括分解结果、指标热图、以及投影图。
+        
+        :param scenario: 当前场景名称
+        :param decomposition_results: 分解后的结果字典，键为周期组合，值为DataFrame
+        :param final_metrics_df: 合并后的指标 DataFrame
+        :param projection_results: 带有投影数据的结果字典，键为周期组合，值为带有投影数据的 DataFrame
+        :param selected_cycles_df: 包含选择的周期组合及其指标的 DataFrame
         """
-        # 可视化代码，生成并保存图表
-        pass
+        output_dir = os.path.join(self.config['output']['result_dir'], self.pathogen, self.city, scenario)
+        
+        visualizer = DecompositionVisualizer(output_dir=output_dir)
+        
+        # 可视化分解结果
+        # visualizer.plot_decomposition_results(decomposition_results)
+        
+        # 可视化基础指标的热图
+        # visualizer.plot_heatmap(final_metrics_df)
+        
+        # 可视化投影结果
+        visualizer.plot_multiple_projections(selected_cycles_df, projection_results, title="Projection with Selected Cycles")
+        exit()
+        
+        # 可视化衍生指标的三维mesh图
+        # visualizer.plot_mesh(final_metrics_df)
+
+    def run(self):
+        """
+        执行实验，根据场景和配置文件中的设定。
+        """
+        model = DecompositionModel()
+        projection_model = ProjectionModel(future_steps=60)
+
+        for scenario in self.scenarios:
+            print(f"Running scenario {scenario}")
+            
+            periods = self.config['scenarios'][scenario]['periods'][self.metadata.get('frequency', 'monthly')]
+
+            # 执行分解并返回所有结果
+            decomposition_results = self._execute_combinations(periods, model, scenario_results=[])
+
+            # 计算并合并所有基础指标和衍生指标
+            final_metrics_df = self._calculate_metrics(decomposition_results, BasicMetricsCalculator(), DerivedMetricsCalculator())
+
+            # 选择顶级周期组合
+            selected_cycles_df = self.select_top_cycles(final_metrics_df, metric='acf', percent=30, ascending=False)
+
+            # 处理分解结果，生成带有投影数据的结果
+            projection_results = self._process_projections(decomposition_results, projection_model)
+
+            # 存储结果
+            # self._save_metrics(scenario, final_metrics_df)
+            # self._save_decomposition_result(scenario, decomposition_results)
+            # self._save_projection_result(scenario, projection_results)
+
+            # 如果需要可视化
+            if self.visualize:
+                self._generate_visualization(scenario, decomposition_results, final_metrics_df, projection_results, selected_cycles_df)
 
 
 if __name__ == "__main__":
@@ -217,10 +307,11 @@ if __name__ == "__main__":
     runner = ExperimentRunner(
         pathogen="flu",
         city="Beijing",
-        scenarios=["baseline", "cross_year", "complex"],
+        # scenarios=["baseline", "cross_year", "complex"],
         # scenarios=["baseline", "cross_year"],
-        # scenarios=["cross_year"],
+        scenarios=["cross_year"],
         # scenarios=["complex"],
+        parallel=True,
         visualize=True
     )
     runner.run()
