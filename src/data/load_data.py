@@ -60,7 +60,8 @@ def validate_and_clean_data(data):
 
     # 自定义解析日期格式
     def parse_date(date_str):
-        return pd.to_datetime(date_str, format='%b-%y', errors='coerce')
+        return pd.to_datetime(date_str, format='%Y/%m/%d', errors='coerce')
+        # return pd.to_datetime(date_str, format='%b-%y', errors='coerce')
 
     # 应用解析函数，并处理错误
     data['date'] = data['date'].apply(parse_date)

@@ -53,6 +53,10 @@ class ExperimentRunner:
         # 加载数据集
         self.dataset = self._get_dataset()
 
+        # 构造输出目录路径
+        self.output_dir_base = os.path.join(self.config['output']['result_dir'], f"{self.city}-{self.pathogen}")
+
+
     def _load_config(self):
         """
         从配置文件中加载详细的实验配置
@@ -71,7 +75,7 @@ class ExperimentRunner:
         根据病原体类型、城市或文件名加载数据集，并返回相应的时间序列数据
         """
         base_path = self.config['data']['base_paths'][self.pathogen]  # 从config.yaml中读取基础路径
-        
+
         if self.filename:
             # 当提供了文件名时，直接加载
             return load_data(file_path=self.filename)
@@ -102,13 +106,21 @@ class ExperimentRunner:
         :param scenario_results: 存储当前场景的分解结果列表
         :return: 所有周期组合的分解结果
         """
+        data_length = len(self.dataset)
+
         if isinstance(periods, list):
             combinations = [tuple(periods)]  # 转换为单一组合的元组形式
         elif isinstance(periods, dict):
             # 支持两个 range 的 cross_year 场景
             if "range1" in periods and "range2" in periods:
-                range1 = range(periods['range1'][0], periods['range1'][1] + 1)
-                range2 = range(periods['range2'][0], periods['range2'][1] + 1)
+                # 限制 range1 的最大值为数据长度的一半
+                max_range1_value = min(periods['range1'][1], (data_length-1) // 2)
+                range1 = range(periods['range1'][0], max_range1_value + 1)
+
+                # 限制 range2 的最大值为数据长度的一半
+                max_range2_value = min(periods['range2'][1], (data_length-1) // 2)
+                range2 = range(periods['range2'][0], max_range2_value + 1)
+                
                 combinations = [(r1, r2) for r1, r2 in product(range1, range2)]
             else:
                 raise ValueError("For cross_year scenario, both 'range1' and 'range2' must be provided.")
@@ -198,7 +210,7 @@ class ExperimentRunner:
         :param scenario: 当前场景名称
         :param decomposition_results: 分解后的结果字典，键为周期组合，值为DataFrame
         """
-        output_dir = os.path.join(self.config['output']['result_dir'], 'decomposition', self.pathogen, self.city, scenario)
+        output_dir = os.path.join(self.output_dir_base, scenario, 'decomposition')
         os.makedirs(output_dir, exist_ok=True)
 
         for period_combination, df in decomposition_results.items():
@@ -214,7 +226,7 @@ class ExperimentRunner:
         :param scenario: 当前场景名称
         :param projection_results: 带有投影数据的结果字典，键为周期组合，值为带有投影数据的 DataFrame
         """
-        output_dir = os.path.join(self.config['output']['result_dir'], 'projection', self.pathogen, self.city, scenario)
+        output_dir = os.path.join(self.output_dir_base, scenario, 'projection')
         os.makedirs(output_dir, exist_ok=True)
 
         for period_combination, df in projection_results.items():
@@ -230,7 +242,7 @@ class ExperimentRunner:
         :param scenario: 当前场景名称
         :param final_df: 合并后的指标 DataFrame
         """
-        output_dir = os.path.join(self.config['output']['result_dir'], self.pathogen, self.city, scenario)
+        output_dir = os.path.join(self.output_dir_base, scenario, 'metrics')
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, 'metrics.csv')
         final_df.to_csv(output_path, index=False)
@@ -246,19 +258,17 @@ class ExperimentRunner:
         :param projection_results: 带有投影数据的结果字典，键为周期组合，值为带有投影数据的 DataFrame
         :param selected_cycles_df: 包含选择的周期组合及其指标的 DataFrame
         """
-        output_dir = os.path.join(self.config['output']['result_dir'], self.pathogen, self.city, scenario)
-        
+        output_dir = os.path.join(self.output_dir_base, scenario, 'figures')
         visualizer = DecompositionVisualizer(output_dir=output_dir)
         
         # 可视化分解结果
         # visualizer.plot_decomposition_results(decomposition_results)
         
         # 可视化基础指标的热图
-        # visualizer.plot_heatmap(final_metrics_df)
+        visualizer.plot_heatmap(final_metrics_df)
         
         # 可视化投影结果
         visualizer.plot_multiple_projections(selected_cycles_df, projection_results, title="Projection with Selected Cycles")
-        exit()
         
         # 可视化衍生指标的三维mesh图
         # visualizer.plot_mesh(final_metrics_df)
@@ -268,7 +278,7 @@ class ExperimentRunner:
         执行实验，根据场景和配置文件中的设定。
         """
         model = DecompositionModel()
-        projection_model = ProjectionModel(future_steps=60)
+        projection_model = ProjectionModel(future_steps=180)
 
         for scenario in self.scenarios:
             print(f"Running scenario {scenario}")
@@ -282,18 +292,18 @@ class ExperimentRunner:
             final_metrics_df = self._calculate_metrics(decomposition_results, BasicMetricsCalculator(), DerivedMetricsCalculator())
 
             # 选择顶级周期组合
-            selected_cycles_df = self.select_top_cycles(final_metrics_df, metric='acf', percent=30, ascending=False)
+            selected_cycles_df = self.select_top_cycles(final_metrics_df, metric='acf', percent=10, ascending=False)
 
             # 处理分解结果，生成带有投影数据的结果
             projection_results = self._process_projections(decomposition_results, projection_model)
 
             # 存储结果
-            # self._save_metrics(scenario, final_metrics_df)
-            # self._save_decomposition_result(scenario, decomposition_results)
-            # self._save_projection_result(scenario, projection_results)
+            self._save_metrics(scenario, final_metrics_df)
+            self._save_decomposition_result(scenario, decomposition_results)
+            self._save_projection_result(scenario, projection_results)
 
             # 如果需要可视化
-            if self.visualize:
+            if self.visualize and scenario=='cross_year':
                 self._generate_visualization(scenario, decomposition_results, final_metrics_df, projection_results, selected_cycles_df)
 
 
@@ -304,14 +314,35 @@ if __name__ == "__main__":
     os.chdir('E:/MultiPathogen')
     print(f"Current working directory: {os.getcwd()}")
 
-    runner = ExperimentRunner(
-        pathogen="flu",
-        city="Beijing",
-        # scenarios=["baseline", "cross_year", "complex"],
-        # scenarios=["baseline", "cross_year"],
-        scenarios=["cross_year"],
-        # scenarios=["complex"],
-        parallel=True,
-        visualize=True
-    )
-    runner.run()
+    # runner = ExperimentRunner(
+    #     pathogen="flu",
+    #     city="Suzhou",
+    #     # scenarios=["baseline", "cross_year", "complex"],
+    #     scenarios=["baseline", "cross_year"],
+    #     # scenarios=["baseline"],
+    #     # scenarios=["cross_year"],
+    #     # scenarios=["complex"],
+    #     parallel=True,
+    #     visualize=True
+    # )
+    # runner.run()
+
+    # for city in ['Beijing', 'Guangzhou', 'Wuhan', 'Xian', 'Lanzhou', 'Suzhou', 'Wenzhou', 'Yunfu']:
+    for city in ['Beijing']:
+        for pathogen in ['rsv']:
+            print (city, pathogen)
+            print ('----------------------------')
+
+            try:
+                runner = ExperimentRunner(
+                    pathogen=pathogen,
+                    city=city,
+                    scenarios=["baseline", "cross_year"],
+                    parallel=True,
+                    visualize=True
+                )
+                runner.run()
+            except:
+                pass
+
+

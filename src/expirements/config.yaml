@@ -12,10 +12,8 @@ scenarios:
   cross_year:
     periods: 
       monthly:
-        range1: [12, 18]  # 第一个跨年周期的范围
-        range2: [18, 30]  # 第二个跨年周期的范围
-        # range2: [18, 36]  # 第二个跨年周期的范围
-        # range2: [35, 35]  # 第二个跨年周期的范围
+        range1: [12, 40]  # 第一个跨年周期的范围
+        range2: [12, 40]  # 第二个跨年周期的范围
       weekly:
         range1: [52, 64]  # 第一个跨年周期的范围
         range2: [64, 104] # 第二个跨年周期的范围
@@ -43,4 +41,4 @@ mstl:
   t_degree: 0
 
 output:
-  result_dir: "results/decomposition/"
+  result_dir: "results/"

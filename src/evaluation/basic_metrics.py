@@ -39,7 +39,7 @@ class BasicMetricsCalculator:
         remainder = df['remainder'].values
         ljung_box_result = acorr_ljungbox(remainder, lags=[lag], return_df=True)
         p_value = ljung_box_result['lb_pvalue'].iloc[0]
-        return p_value
+        return -p_value
 
     def calculate_basic_metrics(self, decomposition_results):
         """

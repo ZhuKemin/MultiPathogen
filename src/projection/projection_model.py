@@ -45,11 +45,15 @@ class ProjectionModel:
         # 合并扩展后的 DataFrame
         df['is_projected'] = False  # 标记为观测数据
         combined_df = pd.concat([df, future_df], ignore_index=True)
-        
+
         # 生成投影列：趋势分量和所有季节性分量之和
-        seasonal_columns = [f'seasonal{cycle}'.lower() for cycle in cycles]
+        seasonal_columns = [f'seasonal{cycle}'.lower() for cycle in cycles] if 'seasonal' not in df.columns else ['seasonal']
         combined_df['projection'] = combined_df['trend'] + combined_df[seasonal_columns].sum(axis=1)
 
-        # 生成观测列：对观测部分为原始数据（趋势分量、所有季节性分量与残差之和），对预测部分为nan
+        # 将投影列中的负值设为 0
+        combined_df['projection'] = combined_df['projection'].clip(lower=0)
+
+        # 生成观测列：对观测部分为原始数据（趋势分量、所有季节性分量与残差之和），对预测部分为 nan
         combined_df['observation'] = combined_df['projection'] + combined_df['remainder']
+
         return combined_df
