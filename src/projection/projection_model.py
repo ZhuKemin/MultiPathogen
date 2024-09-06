@@ -2,8 +2,13 @@ import numpy as np
 import pandas as pd
 
 class ProjectionModel:
-    def __init__(self, future_steps=12):
-        self.future_steps = future_steps
+    def __init__(self, end_date, frequency='monthly'):
+        """
+        :param end_date: 预测的终止日期
+        :param frequency: 数据频率，'monthly' 或 'weekly'
+        """
+        self.end_date = pd.to_datetime(end_date)
+        self.frequency = frequency
 
     def project(self, df, cycles):
         """
@@ -16,12 +21,26 @@ class ProjectionModel:
         # 确保所有列名为小写
         df.columns = [col.lower() for col in df.columns]
         
-        # 获取现有的日期
+        # 获取现有的最后一个日期
         last_date = pd.to_datetime(df['date'].values[-1])
         
-        # 创建扩展的日期，确保格式与原始日期格式一致
-        future_dates = pd.date_range(last_date + pd.DateOffset(months=1), periods=self.future_steps, freq='ME')
+        # 根据频率生成未来的日期
+        if self.frequency == 'monthly':
+            # 对于月度数据，根据最后一个观测日期，生成下个月的同一天
+            future_dates = pd.date_range(last_date + pd.DateOffset(months=1), self.end_date, freq=pd.DateOffset(months=1))
+        elif self.frequency == 'weekly':
+            # 对于周度数据，严格按照最后一个观测日期，生成下一周的日期
+            future_dates = pd.date_range(last_date + pd.DateOffset(weeks=1), self.end_date, freq=pd.DateOffset(weeks=1))
+        else:
+            raise ValueError(f"Unsupported frequency: {self.frequency}")
+        
         future_dates = future_dates.strftime('%Y-%m-%d')  # 转换日期格式为与原数据一致的格式
+
+        # 计算实际的 future steps
+        future_steps = len(future_dates)
+
+        if future_steps == 0:
+            return df  # 如果没有未来的日期需要预测，返回原始 DataFrame
 
         # 扩展 DataFrame，添加未来的日期
         future_df = pd.DataFrame({
@@ -31,15 +50,15 @@ class ProjectionModel:
         
         # 扩展趋势分量
         last_trend_value = df['trend'].values[-1]
-        future_df['trend'] = np.full(self.future_steps, last_trend_value)
+        future_df['trend'] = np.full(future_steps, last_trend_value)
 
         # 扩展周期性分量，并生成新列
         for cycle in cycles:
             seasonal_col = f'seasonal{cycle}'.lower()
             if seasonal_col in df.columns:
-                cycle_length = cycle  # 直接使用 key 中的周期长度
-                repeats = (self.future_steps + cycle_length - 1) // cycle_length
-                extended_seasonal = np.tile(df[seasonal_col].values, repeats)[:self.future_steps]
+                cycle_length = cycle
+                repeats = (future_steps + cycle_length - 1) // cycle_length
+                extended_seasonal = np.tile(df[seasonal_col].values, repeats)[:future_steps]
                 future_df[seasonal_col] = extended_seasonal
 
         # 合并扩展后的 DataFrame
@@ -52,8 +71,5 @@ class ProjectionModel:
 
         # 将投影列中的负值设为 0
         combined_df['projection'] = combined_df['projection'].clip(lower=0)
-
-        # 生成观测列：对观测部分为原始数据（趋势分量、所有季节性分量与残差之和），对预测部分为 nan
-        combined_df['observation'] = combined_df['projection'] + combined_df['remainder']
 
         return combined_df

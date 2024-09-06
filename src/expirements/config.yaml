@@ -7,29 +7,27 @@ scenarios:
   baseline:
     periods: 
       monthly: [12]  # 月度数据对应的年度周期
-      weekly: [52]   # 周度数据对应的年度周期
+      weekly:  [52]  # 周度数据对应的年度周期
 
   cross_year:
     periods: 
       monthly:
-        range1: [12, 40]  # 第一个跨年周期的范围
-        range2: [12, 40]  # 第二个跨年周期的范围
+        range1: [10, 14]  # 第一个跨年周期的范围
+        range2: [24, 36]  # 第二个跨年周期的范围
       weekly:
-        range1: [52, 64]  # 第一个跨年周期的范围
-        range2: [64, 104] # 第二个跨年周期的范围
+        range1: [43, 61]  # 第一个跨年周期的范围
+        range2: [102, 156] # 第二个跨年周期的范围
 
   complex:
     periods: 
       monthly:
         fixed: 12        # 固定的年度周期
-        # range1: [16, 36] # 第一个跨年周期的范围
-        # range2: [18, 48] # 第二个跨年周期的范围
-        range1: [16, 18] # 第一个跨年周期的范围
-        range2: [24, 25] # 第二个跨年周期的范围
+        range1: [10, 14] # 第一个跨年周期的范围
+        range2: [24, 36] # 第二个跨年周期的范围
       weekly:
         fixed: 52         # 固定的年度周期
-        range1: [64, 104] # 第一个跨年周期的范围
-        range2: [70, 120] # 第二个跨年周期的范围
+        range1: [43, 61] # 第一个跨年周期的范围
+        range2: [104, 156] # 第二个跨年周期的范围
 
 stl:
   s_window: "periodic"
