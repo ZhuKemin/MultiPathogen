@@ -50,6 +50,9 @@ class ExperimentRunner:
         # 加载元数据
         self.metadata = self._load_metadata()
 
+        # 提取频率信息
+        self.frequency = self.metadata.get('proc_data_freq') 
+
         # 加载数据集
         self.dataset = self._get_dataset()
 
@@ -68,7 +71,7 @@ class ExperimentRunner:
         """
         加载元数据文件以获取数据集的时间频率等信息
         """
-        return load_metadata(self.metadata_path)
+        return load_metadata(self.metadata_path)[self.city][self.pathogen]
 
     def _get_dataset(self):
         """
@@ -76,14 +79,8 @@ class ExperimentRunner:
         """
         base_path = self.config['data']['base_paths'][self.pathogen]  # 从config.yaml中读取基础路径
 
-        if self.filename:
-            # 当提供了文件名时，直接加载
-            return load_data(file_path=self.filename)
-        elif self.city:
-            # 根据城市名加载数据
-            return load_data(city=self.city, base_path=base_path)
-        else:
-            raise ValueError("必须提供文件名或城市名称中的一个来加载数据集。")
+        # 使用load_data方法加载数据
+        return load_data(city=self.city, file_path=self.filename, base_path=base_path, pathogen=self.pathogen, metadata_path=self.metadata_path)
 
     def _process_combination(self, period_combination, model):
         """
@@ -97,6 +94,7 @@ class ExperimentRunner:
         decomposition_result = model.decompose(self.dataset, period_combination)
         return period_combination, decomposition_result
 
+    # TODO: 复杂场景的逻辑
     def _execute_combinations(self, periods, model, scenario_results):
         """
         执行所有周期组合的分解任务，根据配置选择并行或顺序执行。
@@ -121,7 +119,7 @@ class ExperimentRunner:
                 max_range2_value = min(periods['range2'][1], (data_length-1) // 2)
                 range2 = range(periods['range2'][0], max_range2_value + 1)
                 
-                combinations = [(r1, r2) for r1, r2 in product(range1, range2)]
+                combinations = [(r1, r2) for r1, r2 in product(range1, range2) if r1!=r2]
             else:
                 raise ValueError("For cross_year scenario, both 'range1' and 'range2' must be provided.")
         else:
@@ -262,13 +260,13 @@ class ExperimentRunner:
         visualizer = DecompositionVisualizer(output_dir=output_dir)
         
         # 可视化分解结果
-        # visualizer.plot_decomposition_results(decomposition_results)
+        visualizer.plot_decomposition_results(decomposition_results)
         
         # 可视化基础指标的热图
-        visualizer.plot_heatmap(final_metrics_df)
+        # visualizer.plot_heatmap(final_metrics_df, self.frequency)
         
         # 可视化投影结果
-        visualizer.plot_multiple_projections(selected_cycles_df, projection_results, title="Projection with Selected Cycles")
+        # visualizer.plot_multiple_projections(selected_cycles_df, projection_results, title="Projection with Selected Cycles")
         
         # 可视化衍生指标的三维mesh图
         # visualizer.plot_mesh(final_metrics_df)
@@ -278,12 +276,12 @@ class ExperimentRunner:
         执行实验，根据场景和配置文件中的设定。
         """
         model = DecompositionModel()
-        projection_model = ProjectionModel(future_steps=180)
+        projection_model = ProjectionModel(end_date='2035-01-01', frequency=self.frequency)
 
         for scenario in self.scenarios:
             print(f"Running scenario {scenario}")
             
-            periods = self.config['scenarios'][scenario]['periods'][self.metadata.get('frequency', 'monthly')]
+            periods = self.config['scenarios'][scenario]['periods'][self.frequency]
 
             # 执行分解并返回所有结果
             decomposition_results = self._execute_combinations(periods, model, scenario_results=[])
@@ -306,7 +304,6 @@ class ExperimentRunner:
             if self.visualize and scenario=='cross_year':
                 self._generate_visualization(scenario, decomposition_results, final_metrics_df, projection_results, selected_cycles_df)
 
-
 if __name__ == "__main__":
     import os
 
@@ -328,21 +325,31 @@ if __name__ == "__main__":
     # runner.run()
 
     # for city in ['Beijing', 'Guangzhou', 'Wuhan', 'Xian', 'Lanzhou', 'Suzhou', 'Wenzhou', 'Yunfu']:
+    # for city in ['Beijing', 'Guangzhou', 'Wuhan', 'Lanzhou', 'Suzhou', 'Wenzhou', 'Yunfu']:
     for city in ['Beijing']:
-        for pathogen in ['rsv']:
+        for pathogen in ['flu', 'rsv']:
             print (city, pathogen)
             print ('----------------------------')
 
-            try:
-                runner = ExperimentRunner(
-                    pathogen=pathogen,
-                    city=city,
-                    scenarios=["baseline", "cross_year"],
-                    parallel=True,
-                    visualize=True
-                )
-                runner.run()
-            except:
-                pass
+            runner = ExperimentRunner(
+                pathogen=pathogen,
+                city=city,
+                scenarios=["cross_year"],
+                parallel=True,
+                visualize=True
+            )
+            runner.run()
+
+            # try:
+            #     runner = ExperimentRunner(
+            #         pathogen=pathogen,
+            #         city=city,
+            #         scenarios=["cross_year"],
+            #         parallel=True,
+            #         visualize=True
+            #     )
+            #     runner.run()
+            # except:
+            #     pass
 
 

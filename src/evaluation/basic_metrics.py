@@ -17,6 +17,9 @@ class BasicMetricsCalculator:
         # 计算预测值：trend + 所有 Seasonal 列的和
         predicted = df['trend'] + df[[col for col in df.columns if 'Seasonal' in col]].sum(axis=1)
         
+        # 确保所有预测值均大于零
+        predicted = np.maximum(predicted, 1e-10)
+            
         # 实际值应为预测值 + 残差
         observed = predicted + df['remainder']
         
