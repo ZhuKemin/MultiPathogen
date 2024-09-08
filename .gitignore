@@ -34,7 +34,6 @@ ENV/
 *.bak
 
 # Output files (e.g., from models)
-models/
 *.h5
 *.pkl
 *.joblib
