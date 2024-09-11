@@ -41,3 +41,6 @@ ENV/
 # Files related to your operating system
 .DS_Store
 Thumbs.db
+
+# Ignore all PDF files
+*.pdf
