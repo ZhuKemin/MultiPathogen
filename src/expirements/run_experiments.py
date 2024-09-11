@@ -298,11 +298,11 @@ class ExperimentRunner:
             # 存储结果
             self._save_metrics(scenario, final_metrics_df)
             self._save_decomposition_result(scenario, decomposition_results)
-            self._save_projection_result(scenario, projection_results)
+            # self._save_projection_result(scenario, projection_results)
 
             # 如果需要可视化
-            if self.visualize and scenario=='cross_year':
-                self._generate_visualization(scenario, decomposition_results, final_metrics_df, projection_results, selected_cycles_df)
+            # if self.visualize and scenario=='cross_year':
+            #     self._generate_visualization(scenario, decomposition_results, final_metrics_df, projection_results, selected_cycles_df)
 
 if __name__ == "__main__":
     import os
@@ -324,9 +324,9 @@ if __name__ == "__main__":
     # )
     # runner.run()
 
-    # for city in ['Beijing', 'Guangzhou', 'Wuhan', 'Xian', 'Lanzhou', 'Suzhou', 'Wenzhou', 'Yunfu']:
+    for city in ['Beijing', 'Guangzhou', 'Wuhan', 'Xian', 'Lanzhou', 'Suzhou', 'Wenzhou', 'Yunfu']:
     # for city in ['Beijing', 'Guangzhou', 'Wuhan', 'Lanzhou', 'Suzhou', 'Wenzhou', 'Yunfu']:
-    for city in ['Beijing']:
+    # for city in ['Beijing']:
         for pathogen in ['flu', 'rsv']:
             print (city, pathogen)
             print ('----------------------------')
@@ -334,7 +334,7 @@ if __name__ == "__main__":
             runner = ExperimentRunner(
                 pathogen=pathogen,
                 city=city,
-                scenarios=["cross_year"],
+                scenarios=["cross_year", "baseline"],
                 parallel=True,
                 visualize=True
             )

@@ -2,33 +2,35 @@ import pandas as pd
 import numpy as np
 from scipy.special import gammaln
 from statsmodels.stats.diagnostic import acorr_ljungbox
+from scipy.stats import gamma
 
 class BasicMetricsCalculator:
     def __init__(self):
         pass
 
-    def calculate_poisson_nll(self, df):
+    def calculate_gamma_nll(self, df):
         """
-        计算泊松分布的负极大似然率（NLL）。
-        
-        :param df: 时间序列分解后的DataFrame，包含'Trend', 'Seasonal' 列 和 'remainder' 列
-        :return: 负极大似然率值
+        使用观测值拟合 Gamma 分布模型，并计算预测值在该分布下的 NLL。
+
+        :param df: DataFrame，包含 'observation', 'remainder' 列。
+        :return: 计算得到的 NLL 值。
         """
-        # 计算预测值：trend + 所有 Seasonal 列的和
-        predicted = df['trend'] + df[[col for col in df.columns if 'Seasonal' in col]].sum(axis=1)
-        
-        # 确保所有预测值均大于零
+        observed = df['observation']
+        predicted = df['observation'] - df['remainder']
+
+        # 修正为非负数，防止 log(0) 或负数问题
+        observed = np.maximum(observed, 1e-10)
         predicted = np.maximum(predicted, 1e-10)
-            
-        # 实际值应为预测值 + 残差
-        observed = predicted + df['remainder']
-        
-        # 泊松分布的对数似然计算
-        log_likelihoods = observed * np.log(predicted) - predicted - gammaln(observed + 1)
-        
-        # 计算负极大似然率
+
+        # 使用观测值拟合 Gamma 分布
+        shape, loc, scale = gamma.fit(observed, floc=0)  # loc 固定为 0，因为 Gamma 分布常用参数形式是 a, loc, scale
+
+        # 使用拟合的参数计算预测值的对数似然值
+        log_likelihoods = gamma.logpdf(predicted, a=shape, loc=loc, scale=scale)
+
+        # 计算 NLL
         nll = -np.sum(log_likelihoods)
-        
+
         return nll
 
     def calculate_autocorr_significance(self, df, lag=10):
@@ -55,7 +57,7 @@ class BasicMetricsCalculator:
 
         for period, df in decomposition_results.items():
             # 计算基础指标
-            nll = self.calculate_poisson_nll(df)
+            nll = self.calculate_gamma_nll(df)
             acf = self.calculate_autocorr_significance(df)
             metrics_list.append({
                 'period': period,
