@@ -1,0 +1,133 @@
+\usepackage{fullpage}
+
+\documentclass{article}
+
+\begin{document}
+\section{Methods}
+\subsection{Data}
+Our study utilized data solely from published literature, with the initial reference pool comprising 156 studies identified in the systematic review. The selection process, as illustrated in Figure 1a, began by excluding 19 studies conducted outside mainland China, resulting in 137 studies. We further excluded 118 studies that did not span at least 5 years, as this duration is essential for capturing inter-annual cycles and accurately assessing seasonal patterns. This rigorous screening process retained 19 studies. Subsequently, 6 studies were excluded for not providing data at the city level, focusing instead on broader geographical areas like provinces. The exclusion of these studies ensured the precision of our urban-focused analysis. The remaining 13 studies were further scrutinized, leading to the exclusion of 4 studies that lacked complete monthly data, which is critical for our detailed analysis of seasonal variations. 
+
+To ensure accuracy and consistency in the analysis, we utilized WebPlotDigitizer software (version 4.6) to extract data from published graphs. This tool facilitated the conversion of graphical data into numerical values suitable for analysis. 
+
+The geographical distribution of the datasets and the corresponding monthly case data, as detailed in Figure 1b, highlight the regional differences in the burden of influenza across these major urban centers. This comprehensive and methodical data selection and processing approach ensures that our analysis accurately reflects the seasonal and geographical variations in the burden of influenza. By focusing on case numbers instead of positivity rates, our study provides a clear estimation of the disease burden in these regions, enhancing the reliability of our findings and offering valuable insights into the epidemiology of influenza in China.
+
+From this targeted search, usable data covering a minimum of five years were found for Beijing, Lanzhou, Suzhou, and Xi'an. The data for these cities, as represented in Figure 1b, included monthly case counts for influenza. The temporal range of the data was from 2007 to 2021. In instances where publications provided outpatient visit numbers alongside positivity rates, we calculated the actual number of cases by multiplying these figures. Additionally, to maintain consistency across data sources, we standardized data initially reported on daily or weekly bases into monthly aggregates.
+
+\subsection{Notes on MSTL}
+The MSTL  method is employed to analyze respiratory disease data, focusing on various hypothesized scenarios to capture different cyclic patterns. This approach uncovers not only the expected yearly seasonality but also other significant trends affecting disease spread.
+
+\subsubsection{Trend Extraction}
+The trend component \(T_t\) is extracted using a Loess (Locally Estimated Scatterplot Smoothing) filter. This filter smooths the time series by fitting multiple linear regressions in localized subsets of the data. The Loess smoothing function can be represented as:
+\[
+T_t = \text{Loess}(Y_t, \lambda_t)
+\]
+where \(\lambda_t\) is the smoothing parameter that controls the degree of smoothing.
+
+\subsubsection{Seasonal Component Extraction}
+After removing the trend component, the seasonal components \(S_{i,t}\) are extracted. For each seasonal cycle \(i\), the seasonal component is computed using the Loess filter applied to the detrended series \(Y_t - T_t\):
+\[
+S_{i,t} = \text{Loess}(Y_t - T_t, \lambda_{s_i})
+\]
+where \(\lambda_{s_i}\) is the smoothing parameter for the seasonal cycle \(i\).
+
+\subsubsection{Residual Calculation}
+The remainder \(R_t\) is calculated by subtracting the trend and all seasonal components from the observed series:
+\[
+R_t = Y_t - T_t - \sum_{i} S_{i,t}
+\]
+This iterative process continues until the trend and seasonal components converge, providing a comprehensive decomposition of the time series data into trend, multiple seasonal, and remainder components.
+
+\subsection{Scenarios for Analysis}
+
+\begin{itemize}
+  \item \textbf{Fixed Annual Cycle with Single Optimized Inter-Annual Cycle}: 
+  In this scenario, a fixed annual cycle, either a 52-week or a 12-month period, represents the typical yearly pattern observed in respiratory diseases. Additionally, a secondary inter-annual cycle is optimized within a specified range to identify additional periodic behaviors in the data. The MSTL decomposition model for this scenario can be represented as:
+  \[
+  Y_t = T_t + \tilde{S}_{t} + S_{1,t}^* + R_t
+  \]
+  where \(T_t\) denotes the trend component at time \(t\), \(\tilde{S}_{t}\) is the seasonal component from the fixed annual cycle, \(S_{1,t}^*\) is the seasonal component from the optimized inter-annual cycle, and \(R_t\) is the remainder component at time \(t\).
+
+  \item \textbf{Dual Optimized Inter-Annual Cycles}: 
+  In this scenario, the annual cycle is not predefined. Instead, two inter-annual cycles are optimized simultaneously within specified ranges, aiming to identify the most effective decomposition that elucidates multiple periodic behaviors in the data. The MSTL decomposition model for this scenario can be represented as:
+  \[
+  Y_t = T_t + S_{1,t}^* + S_{2,t}^* + R_t
+  \]
+  where \(T_t\) denotes the trend component at time \(t\), and \(S_{1,t}^*\) and \(S_{2,t}^*\) are the seasonal components from the two optimized inter-annual cycles, respectively.
+
+  \item \textbf{Fixed Annual Cycle with Dual Optimized Inter-Annual Cycles}: 
+  This scenario assumes a fixed annual cycle and optimizes two additional inter-annual cycles. The goal is to identify secondary and tertiary periodic behaviors that significantly impact disease dynamics. The MSTL decomposition model for this scenario can be represented as:
+  \[
+  Y_t = T_t + \tilde{S}_{t} + S_{1,t}^* + S_{2,t}^* + R_t
+  \]
+  where \(T_t\) denotes the trend component at time \(t\), \(\tilde{S}_{t}\) is the seasonal component from the fixed annual cycle, and \(S_{1,t}^*\) and \(S_{2,t}^*\) are the seasonal components from the two optimized inter-annual cycles, respectively.
+
+  \item \textbf{Baseline Annual Cycle}: 
+  As a baseline scenario, only the fixed annual cycle is considered without optimizing any additional cycles. This serves as a reference point to compare the effectiveness of the more complex models. The MSTL decomposition model for this scenario can be represented as:
+  \[
+  Y_t = T_t + \tilde{S}_{t} + R_t
+  \]
+  where \(T_t\) denotes the trend component at time \(t\), \(\tilde{S}_{t}\) is the seasonal component from the fixed annual cycle, and \(R_t\) is the remainder component at time \(t\).
+\end{itemize}
+
+\subsection{Optimization Objectives for Cycle Searching}
+
+This section delves into the core of our methodology by establishing the objective functions used to optimize the model, focusing on two critical indicators: the Negative Log-Likelihood (NLL) and the Auto-Correlation Significance (ACS).
+
+\begin{itemize}
+  \item \textbf{Negative Log-Likelihood (NLL)}:
+  
+  The NLL indicator is derived from the likelihood that the model residuals follow a Gaussian distribution, aiming for residuals that resemble white noise. Mathematically, the NLL is calculated using the log of the Gaussian likelihood function, with a negative sign applied to transform the maximization problem into a minimization one.
+
+  In our updated approach, the NLL is calculated considering the variability in residuals across different months. For each data point, the residual is compared to the predicted value, and the monthly standard deviation is used to normalize the residuals, allowing for a more accurate representation of the likelihood. The NLL is calculated as:
+
+  \[
+  \text{NLL} = - \frac{1}{n} \sum_{i=1}^{n} \left( -0.5 \log(2 \pi \sigma_{m(i)}^2) - \frac{(y_i - \hat{y}_i)^2}{2 \sigma_{m(i)}^2} \right)
+  \]
+
+  where \(y_i\) are the observed values, \(\hat{y}_i\) are the predicted values from the model, \(n\) is the number of observations, and \(\sigma_{m(i)}\) is the standard deviation of the residuals for the month \(m(i)\) of the \(i\)-th observation.
+  
+  \item \textbf{Auto-Correlation Significance (ACS)}:
+
+  In our analysis, we assess the significance of autocorrelation in the residuals of the time series model. Residuals are calculated as the differences between observed and predicted values, indicating the variance unexplained by the model.
+
+  We evaluate these residuals up to 10 lags (\(\text{nlags} = 10\)), using the Autocorrelation Function (ACF). The ACF measures how residuals at different time lags correlate with each other, calculated as:
+
+  \[
+  r_k = \frac{\sum_{t=k+1}^{N} (R_t - \bar{R})(R_{t-k} - \bar{R})}{\sum_{t=1}^{N} (R_t - \bar{R})^2}
+  \]
+
+  where \(r_k\) is the autocorrelation at lag \(k\), \(R_t\) is the residual at time \(t\), and \(\bar{R}\) is the mean of the residuals.
+
+  We then apply the Ljung-Box test to these residuals to determine if any of the autocorrelations are significantly different from zero. The test returns a p-value indicating the likelihood that observed autocorrelations are random. The Ljung-Box statistic \(Q_k\) is computed as:
+
+  \[
+  Q_k = N(N+2) \sum_{i=1}^{k} \frac{r_i^2}{N-i}
+  \]
+
+  where \(N\) is the number of observations, and \(r_i\) is the autocorrelation at lag \(i\). A lower p-value suggests significant autocorrelation, indicating that the residuals are not purely random and that the model might not fully capture the data's structure.
+\end{itemize}
+
+
+\begin{itemize}
+  \item \textbf{Rank Composite Metric}:
+
+  The Rank composite metric integrates the rankings of the Mean Absolute Error (MAE) and Negative Log-Likelihood (NLL) to provide a balanced evaluation of model performance. For each cycle combination, ranks are assigned to the MAE and NLL values, and the composite rank is calculated as the average of these two ranks. Mathematically, the composite rank \( R \) for a cycle combination can be expressed as:
+
+  \[
+  R = \frac{\text{Rank}(\text{MAE}) + \text{Rank}(\text{NLL})}{2}
+  \]
+
+  This approach ensures that the model is evaluated on its ability to minimize both prediction error and negative log-likelihood, offering a comprehensive measure of performance.
+  
+  \item \textbf{Multiplicative Composite Metric}:
+
+  The Multiplicative composite metric combines the normalized values of MAE and NLL into a single performance indicator. Each MAE and NLL value is normalized to a [0,1] scale, and their product is computed to represent the combined performance. The multiplicative composite metric \( M \) for a cycle combination is calculated as:
+
+  \[
+  M = \left( \frac{\text{MAE} - \min(\text{MAE})}{\max(\text{MAE}) - \min(\text{MAE})} \right) \times \left( \frac{\text{NLL} - \min(\text{NLL})}{\max(\text{NLL}) - \min(\text{NLL})} \right)
+  \]
+
+  This product highlights the overall performance, with lower values indicating better performance, as it balances error minimization and data fit.
+\end{itemize}
+
+\end{document}
