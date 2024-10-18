@@ -15,7 +15,7 @@ Guangzhou:
   flu:
     data_type: rates
     name: Yan-2024-Guangzhou
-    proc_data_freq: monthly
+    proc_data_freq: weekly
     raw_data_freq: monthly
     start_date: '2010-10-04'
   rsv:
@@ -39,7 +39,7 @@ Lanzhou:
     start_date: '2010-12-01'
 Suzhou:
   flu:
-    data_type: cases
+    data_type: rates
     name: Yu-2019-Suzhou
     proc_data_freq: monthly
     raw_data_freq: monthly
