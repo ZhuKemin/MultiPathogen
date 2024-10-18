@@ -3,6 +3,7 @@
 #### CHEN, Xi'an, Flu ####
 cycle1 <- seq(10*30, 14*30, 30)
 cycle2 <- seq(18*30, 36*30, 30)
+
 test_grid_mstl <- CJ(cycle1 = cycle1, 
                              cycle2 = cycle2) %>% 
   mutate(ll = as.numeric(NA))
