@@ -3,6 +3,8 @@ library(forecast)
 library(data.table)
 library(yaml)
 
+yaml_data <- yaml.load_file("data/metadata.yaml")
+
 dir_flu <- "data/raw/flu/"
 dir_rsv <- "data/raw/rsv/"
 
@@ -61,10 +63,8 @@ data_rsv[[yaml_data$Guangzhou$rsv$name]] <- data_rsv_raw$`data/raw/rsv//Zou-2016
 yaml_data$Guangzhou$rsv$data_type <- "rates"
 
 # Lanzhou
-data_rsv_raw$`data/raw/rsv//Liang-2015-Lanzhou/Liang-2015-Lanzhou_2010-2011.csv`
-data_rsv_raw$`data/raw/rsv//Liang-2015-Lanzhou/Liang-2015-Lanzhou_2011-2012.csv`
+data_rsv[[yaml_data$Lanzhou$rsv$name]] <- read_csv("data/processed/rsv/Liang-2015-Lanzhou-Cases.csv") %>% 
+  rename(X2 = value)
 
 # Guangzhou
 data_rsv_raw$guangzhou
-
-yaml_data <- yaml.load_file("data/metadata.yaml")

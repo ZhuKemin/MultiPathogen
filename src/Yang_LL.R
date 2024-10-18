@@ -235,8 +235,7 @@ test_grid_mstl %>%
               rename(stl_ll = ll) %>% 
               dplyr::select(-cycle2),
             by = "cycle1") %>% 
-  mutate(LLR = ll/stl_ll) %>% 
-  dplyr:;
+  mutate(LLR = ll/stl_ll) 
 
 test_grid_mstl %>% 
   ggplot(., aes(x = ll)) +
