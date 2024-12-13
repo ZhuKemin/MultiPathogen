@@ -3,8 +3,6 @@
 # (2) data type
 # (3) cycle 1 and cycle 2 assumption will included in this
 library(pacman)
-p_load(magrittr)
-
 source("src/run_mstl/0_LoadData.R")
 
 get_LL <- function(disease = NULL,

@@ -2,14 +2,22 @@ library(tidyverse)
 library(forecast)
 library(data.table)
 library(yaml)
+library(magrittr)
 
 yaml_data <- yaml.load_file("data/metadata.yaml")
 
 dir_flu <- "data/raw/flu/"
 dir_rsv <- "data/raw/rsv/"
 
-fn_flu <- paste0(dir_flu, list.files(dir_flu)) %>% 
-  map(list.files, pattern = ".csv")
+fn_flu <- list("Chen-2023-Xian.csv",
+               "Liu-2022-Lanzhou.csv",
+               "Liu-2023-Wuhan.csv",
+               "Peng-2016-Yunfu.csv",
+               "Wu-2018-Beijing.csv",
+               "Yan-2024-Guangzhou.csv",
+               "Yu-2019-Suzhou.csv",        
+               "Zhong-2016-Wenzhou.csv")
+
 fn_rsv <- paste0(dir_rsv, list.files(dir_rsv)) %>% 
   map(list.files, pattern = ".csv")
 
@@ -66,5 +74,77 @@ yaml_data$Guangzhou$rsv$data_type <- "rates"
 data_rsv[[yaml_data$Lanzhou$rsv$name]] <- read_csv("data/processed/rsv/Liang-2015-Lanzhou-Cases.csv") %>% 
   rename(X2 = value)
 
-# Guangzhou
-data_rsv_raw$guangzhou
+# paste dates
+paste0("data/processed/flu/", list.files("data/processed/flu", pattern = ".csv")) %>% 
+  map(read_csv) %>% 
+  setNames(gsub(".csv", "",list.files("data/processed/flu", pattern = ".csv")) %>% 
+             gsub("-Cases","",.) %>% 
+             gsub("-Rates","",.)) -> dates_flu
+
+data_flu %>% map(dim) %>% map(data.table) %>% map(rownames_to_column) %>% bind_rows(.id = "study_name") %>% mutate(source = "data") %>% 
+  bind_rows(dates_flu %>% map(dim)  %>% map(data.table) %>% map(rownames_to_column) %>% bind_rows(.id = "study_name") %>% mutate(source = "dates")) %>% 
+  pivot_wider(names_from = source,
+              values_from = V1) %>% 
+  dplyr::filter(data != dates)
+
+paste0("data/processed/flu/", list.files("data/processed/flu", pattern = ".csv")) %>% 
+  map(read_csv) %>% 
+  setNames(gsub(".csv", "",list.files("data/processed/flu", pattern = ".csv")) %>% 
+             gsub("-Cases","",.) %>% 
+             gsub("-Rates","",.)) -> dates_flu
+
+paste0("data/processed/rsv/", list.files("data/processed/rsv", pattern = ".csv")) %>% 
+  map(read_csv) %>% 
+  setNames(gsub(".csv", "",list.files("data/processed/rsv", pattern = ".csv")) %>% 
+             gsub("-Cases","",.) %>% 
+             gsub("-Rates","",.)) %>%  
+  map(~.[complete.cases(.),]) -> dates_rsv
+
+data_flu %>% map(dim) %>% map(data.table) %>% map(rownames_to_column) %>% bind_rows(.id = "study_name") %>% mutate(source = "data") %>%
+  bind_rows(dates_flu %>% map(dim)  %>% map(data.table) %>% map(rownames_to_column) %>% bind_rows(.id = "study_name") %>% mutate(source = "dates")) %>%
+  pivot_wider(names_from = source,
+              values_from = V1) %>%
+  dplyr::filter(data != dates)
+
+data_rsv %>% map(dim) %>% map(data.table) %>% map(rownames_to_column) %>% bind_rows(.id = "study_name") %>% mutate(source = "data") %>%
+  bind_rows(dates_rsv %>% map(dim)  %>% map(data.table) %>% map(rownames_to_column) %>% bind_rows(.id = "study_name") %>% mutate(source = "dates")) %>%
+  pivot_wider(names_from = source,
+              values_from = V1) %>%
+  dplyr::filter(data != dates)
+
+# rsv dates can be moved in directly
+for(i in 1:8){
+  name_tmp <- names(data_rsv)[i]
+  data_rsv[[i]][, "date"] <- lubridate::ymd(dates_rsv[[name_tmp]]$date)
+}
+
+# flu dates - five of them can be moved in
+for(i in 1:8){
+  name_tmp <- names(data_flu)[i]
+  if(!name_tmp %in% c("Chen-2023-Xian",
+                     "Wu-2018-Beijing",
+                     "Yan-2024-Guangzhou")){
+    data_flu[[i]][, "date"] <- lubridate::ymd(dates_flu[[name_tmp]]$date)
+  }
+}
+
+data_flu$`Chen-2023-Xian` %<>% 
+  mutate(date = seq(lubridate::ymd(yaml_data$Xian$flu$start_date),
+                    lubridate::ymd(yaml_data$Xian$flu$start_date) + n() -1,
+                    by = "day"))
+
+data_flu$`Wu-2018-Beijing` %<>% 
+  mutate(date = seq(lubridate::ymd(yaml_data$Beijing$flu$start_date),
+                    lubridate::ymd(yaml_data$Beijing$flu$start_date) + (n() -1)*7,
+                    by = "week"))
+
+data_flu$`Yan-2024-Guangzhou` %>% 
+  mutate(date = seq(lubridate::ymd("2011-01-01"),
+                    lubridate::ymd("2011-01-01") + (n() -1)*7,
+                    by = "week")) %>% 
+  ggplot(., aes(x = date, y = X2)) +
+  geom_line() +
+  geom_vline(xintercept = seq(lubridate::ymd("2011-01-01"),
+                              lubridate::ymd("2019-01-01"),
+                              "year"),
+             linetype = 2)
