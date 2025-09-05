@@ -3,6 +3,7 @@ library(forecast)
 library(data.table)
 library(yaml)
 library(magrittr)
+library(cowplot)
 
 yaml_data <- yaml.load_file("data/metadata.yaml")
 
@@ -148,3 +149,15 @@ data_flu$`Yan-2024-Guangzhou` %>%
                               lubridate::ymd("2019-01-01"),
                               "year"),
              linetype = 2)
+
+data_rsv %>% 
+  map(summarise,
+      date_min = min(date),
+      date_max = max(date)) %>% 
+  bind_rows(.id = "loc") %>% 
+  mutate(date_diff = date_max - date_min) %>% 
+  separate(loc, into = c("seg1", "seg2", "seg3")) %>% 
+  mutate(direction = if_else(seg3 %in% c("Beijing", "Xian", "Lanzhou"),
+                             "North",
+                             "South")) %>% 
+  group_by(direction) %>% group_split()
